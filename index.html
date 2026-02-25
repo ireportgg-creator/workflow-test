@@ -1,6 +1,103 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>작업 모니터링 시스템</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .status-btn { padding: 5px 10px; margin: 2px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; }
+        .current-status { font-weight: bold; color: #007bff; }
+        .badge { display: inline-block; padding: 3px 8px; background: #eee; border-radius: 12px; font-size: 0.8em; }
+    </style>
+</head>
 <body>
-  <h1>Hello, GitHub Pages!</h1>
+    <div class="container">
+        <h1>🚀 작업 진행상황 대시보드</h1>
+        <div id="app">
+            </div>
+    </div>
+
+    <script>
+        // 1. Firebase 설정 (본인의 정보로 교체 필수!)
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "firebase/app";
+        import { getAnalytics } from "firebase/analytics";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+          apiKey: "AIzaSyDEzIHcKHZpDu3QUpX62UUTXVvZmMO16yI",
+          authDomain: "process-monitoring-test-ad6df.firebaseapp.com",
+          databaseURL: "https://process-monitoring-test-ad6df-default-rtdb.firebaseio.com",
+          projectId: "process-monitoring-test-ad6df",
+          storageBucket: "process-monitoring-test-ad6df.firebasestorage.app",
+          messagingSenderId: "307090124203",
+          appId: "1:307090124203:web:0478a3e30f0fd6101276ee",
+          measurementId: "G-ZHP1T48CWT"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 2. 하드코딩된 기초 데이터 [cite: 4]
+        const clients = [
+            { id: 'c1', name: '하나', task: '테스트1' },
+            { id: 'c2', name: '두울', task: '테스트2' },
+            { id: 'c3', name: '세엣', task: '테스트3' },
+            { id: 'c4', name: '네엣', task: '테스트4' },
+            { id: 'c5', name: '다섯', task: '테스트5' }
+        ];
+        const stages = ["접수완료", "인쇄대기", "인쇄완료", "납품대기", "납품완료"]; [cite: 4]
+
+        let previousData = {}; // 이전 상태 저장용 (알림 팝업 비교용)
+
+        // 3. 데이터 업데이트 함수 (체커 앱 역할) 
+        function changeStatus(clientId, newStatus) {
+            db.ref('jobs/' + clientId).update({
+                status: newStatus,
+                updatedAt: Date.now()
+            });
+        }
+
+        // 4. 실시간 모니터링 및 화면 렌더링 (메인 페이지 역할) [cite: 2, 5]
+        db.ref('jobs').on('value', (snapshot) => {
+            const data = snapshot.val() || {};
+            const appDiv = document.getElementById('app');
+            appDiv.innerHTML = '';
+
+            clients.forEach(client => {
+                const currentStatus = data[client.id]?.status || "단계 미정";
+                
+                // 알림 팝업 로직 (상태가 변했을 때만 실행) 
+                if (previousData[client.id] && previousData[client.id] !== currentStatus) {
+                    alert(`[알림톡] ${client.name}님, '${client.task}' 공정이 [${currentStatus}] 단계로 업데이트되었습니다.`);
+                }
+                previousData[client.id] = currentStatus;
+
+                // 화면 UI 생성
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${client.name} <span class="badge">${client.task}</span></h3>
+                    <p>현재 공정: <span class="current-status">${currentStatus}</span></p>
+                    <div>
+                        ${stages.map(s => `<button class="status-btn" onclick="changeStatus('${client.id}', '${s}')">${s}</button>`).join('')}
+                    </div>
+                `;
+                appDiv.appendChild(card);
+            });
+        });
+    </script>
 </body>
 </html>
