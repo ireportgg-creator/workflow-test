@@ -2,34 +2,52 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>작업 모니터링 시스템</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>작업 공정 관리 (현장용)</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .status-btn { padding: 5px 10px; margin: 2px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; }
-        .current-status { font-weight: bold; color: #007bff; }
-        .badge { display: inline-block; padding: 3px 8px; background: #eee; border-radius: 12px; font-size: 0.8em; }
+        :root { --primary-color: #007aff; }
+        body { font-family: -apple-system, sans-serif; background: #f2f2f7; margin: 0; padding: 20px; padding-bottom: env(safe-area-inset-bottom); }
+        .header { margin-bottom: 20px; }
+        .list-item { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .info h3 { margin: 0; font-size: 17px; }
+        .info p { margin: 4px 0 0; color: #8e8e93; font-size: 14px; }
+        .status-badge { background: #e5e5ea; padding: 4px 8px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--primary-color); }
+        
+        /* 공정 선택 모달 */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: flex-end; }
+        .modal-content { background: white; width: 100%; border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; }
+        .stage-btn { display: block; width: 100%; padding: 15px; margin-bottom: 10px; border: none; background: #f2f2f7; border-radius: 10px; font-size: 16px; cursor: pointer; }
+        .stage-btn:active { background: #d1d1d6; }
+        .close-btn { color: #ff3b30; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 작업 진행상황 대시보드</h1>
-        <div id="app">
-            </div>
+
+<div class="header">
+    <h1>작업 리스트</h1>
+</div>
+
+<div id="job-list">
     </div>
 
-    <script>
-        // 1. Firebase 설정 (본인의 정보로 교체 필수!)
-        // Import the functions you need from the SDKs you need
+<div id="modal">
+    <div class="modal-content">
+        <h2 id="modal-title">공정 변경</h2>
+        <div id="stage-buttons"></div>
+        <button class="stage-btn close-btn" onclick="closeModal()">취소</button>
+    </div>
+</div>
+
+<script>
+    // 1. Firebase 설정 (본인의 값으로 교체하세요)
+    // Import the functions you need from the SDKs you need
         import { initializeApp } from "firebase/app";
         import { getAnalytics } from "firebase/analytics";
         // TODO: Add SDKs for Firebase products that you want to use
         // https://firebase.google.com/docs/web/setup#available-libraries
-
+        
         // Your web app's Firebase configuration
         // For Firebase JS SDK v7.20.0 and later, measurementId is optional
         const firebaseConfig = {
@@ -47,57 +65,74 @@
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+    // 2. 파일 데이터 기반 초기 설정
+    const initialJobs = [
+        { id: '1', client: '성심', task: '작업1', manager: '박미경', phone: '010-0000-0000' },
+        { id: '2', client: '동인', task: '작업2', manager: '김민경', phone: '010-1111-1111' },
+        { id: '3', client: '한빛', task: '작업3', manager: '오재미', phone: '010-2222-2222' },
+        { id: '4', client: '남북', task: '작업4', manager: '유재석', phone: '010-3333-3333' },
+        { id: '5', client: '제일', task: '작업5', manager: '강호동', phone: '010-4444-4444' }
+    ];
+    const stages = ["접수완료", "인쇄대기", "인쇄완료", "납품대기", "납품완료"];
 
-        // 2. 하드코딩된 기초 데이터 [cite: 4]
-        const clients = [
-            { id: 'c1', name: '하나', task: '테스트1' },
-            { id: 'c2', name: '두울', task: '테스트2' },
-            { id: 'c3', name: '세엣', task: '테스트3' },
-            { id: 'c4', name: '네엣', task: '테스트4' },
-            { id: 'c5', name: '다섯', task: '테스트5' }
-        ];
-        const stages = ["접수완료", "인쇄대기", "인쇄완료", "납품대기", "납품완료"]; [cite: 4]
-
-        let previousData = {}; // 이전 상태 저장용 (알림 팝업 비교용)
-
-        // 3. 데이터 업데이트 함수 (체커 앱 역할) 
-        function changeStatus(clientId, newStatus) {
-            db.ref('jobs/' + clientId).update({
-                status: newStatus,
-                updatedAt: Date.now()
+    // 데이터베이스 초기화 (데이터가 없을 때만 실행)
+    db.ref('jobs').once('value', snapshot => {
+        if (!snapshot.exists()) {
+            initialJobs.forEach(job => {
+                db.ref('jobs/' + job.id).set({ ...job, status: '접수완료' });
             });
         }
+    });
 
-        // 4. 실시간 모니터링 및 화면 렌더링 (메인 페이지 역할) [cite: 2, 5]
-        db.ref('jobs').on('value', (snapshot) => {
-            const data = snapshot.val() || {};
-            const appDiv = document.getElementById('app');
-            appDiv.innerHTML = '';
+    let currentSelectedId = null;
 
-            clients.forEach(client => {
-                const currentStatus = data[client.id]?.status || "단계 미정";
-                
-                // 알림 팝업 로직 (상태가 변했을 때만 실행) 
-                if (previousData[client.id] && previousData[client.id] !== currentStatus) {
-                    alert(`[알림톡] ${client.name}님, '${client.task}' 공정이 [${currentStatus}] 단계로 업데이트되었습니다.`);
-                }
-                previousData[client.id] = currentStatus;
+    // 3. 리스트 렌더링 및 실시간 업데이트
+    db.ref('jobs').on('value', snapshot => {
+        const jobs = snapshot.val();
+        const listDiv = document.getElementById('job-list');
+        listDiv.innerHTML = '';
 
-                // 화면 UI 생성
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <h3>${client.name} <span class="badge">${client.task}</span></h3>
-                    <p>현재 공정: <span class="current-status">${currentStatus}</span></p>
-                    <div>
-                        ${stages.map(s => `<button class="status-btn" onclick="changeStatus('${client.id}', '${s}')">${s}</button>`).join('')}
-                    </div>
-                `;
-                appDiv.appendChild(card);
-            });
+        for (let id in jobs) {
+            const item = jobs[id];
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.onclick = () => openModal(id, item.client);
+            div.innerHTML = `
+                <div class="info">
+                    <h3>${item.client}</h3>
+                    <p>${item.task} | ${item.manager}</p>
+                </div>
+                <div class="status-badge">${item.status}</div>
+            `;
+            listDiv.appendChild(div);
+        }
+    });
+
+    // 4. 모달 제어 함수
+    function openModal(id, client) {
+        currentSelectedId = id;
+        document.getElementById('modal-title').innerText = `${client} 공정 변경`;
+        const btnContainer = document.getElementById('stage-buttons');
+        btnContainer.innerHTML = '';
+        
+        stages.forEach(stage => {
+            const btn = document.createElement('button');
+            btn.className = 'stage-btn';
+            btn.innerText = stage;
+            btn.onclick = () => updateStatus(stage);
+            btnContainer.appendChild(btn);
         });
-    </script>
+        document.getElementById('modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('modal').style.display = 'none';
+    }
+
+    function updateStatus(newStatus) {
+        db.ref('jobs/' + currentSelectedId).update({ status: newStatus })
+          .then(() => closeModal());
+    }
+</script>
 </body>
 </html>
