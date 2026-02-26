@@ -2,54 +2,55 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>작업 공정 관리 (현장용)</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>접수 및 공정 모니터링</title>
     <style>
-        :root { --primary-color: #007aff; }
-        body { font-family: -apple-system, sans-serif; background: #f2f2f7; margin: 0; padding: 20px; padding-bottom: env(safe-area-inset-bottom); }
-        .header { margin-bottom: 20px; }
-        .list-item { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .info h3 { margin: 0; font-size: 17px; }
-        .info p { margin: 4px 0 0; color: #8e8e93; font-size: 14px; }
-        .status-badge { background: #e5e5ea; padding: 4px 8px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--primary-color); }
-        
-        /* 공정 선택 모달 */
-        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: flex-end; }
-        .modal-content { background: white; width: 100%; border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; }
-        .stage-btn { display: block; width: 100%; padding: 15px; margin-bottom: 10px; border: none; background: #f2f2f7; border-radius: 10px; font-size: 16px; cursor: pointer; }
-        .stage-btn:active { background: #d1d1d6; }
-        .close-btn { color: #ff3b30; font-weight: bold; margin-top: 10px; }
+        body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
-
-<div class="header">
-    <h1>작업 리스트</h1>
-</div>
-
-<div id="job-list">
+    <h2>새 작업 접수</h2>
+    <div class="form-group">
+        <label>상호</label>
+        <input type="text" id="company">
     </div>
-
-<div id="modal">
-    <div class="modal-content">
-        <h2 id="modal-title">공정 변경</h2>
-        <div id="stage-buttons"></div>
-        <button class="stage-btn close-btn" onclick="closeModal()">취소</button>
+    <div class="form-group">
+        <label>작업명</label>
+        <input type="text" id="jobName">
     </div>
-</div>
+    <div class="form-group">
+        <label>담당자</label>
+        <input type="text" id="manager">
+    </div>
+    <div class="form-group">
+        <label>담당자 전화번호</label>
+        <input type="text" id="phone">
+    </div>
+    <div class="form-group">
+        <label>진행 상황</label>
+        <select id="status">
+            <option value="접수완료">접수완료</option>
+            <option value="출력">출력</option>
+             <option value="인쇄">인쇄</option>
+            <option value="후가공">후가공</option>
+            <option value="제본">제본</option>
+            <option value="납품">납품</option>
+            <option value="완료">완료</option>
+        </select>
+    </div>
+    <button id="submitBtn">접수</button>
 
-<script>
-    // 1. Firebase 설정 (본인의 값으로 교체하세요)
-    // Import the functions you need from the SDKs you need
-        import { initializeApp } from "firebase/app";
-        import { getAnalytics } from "firebase/analytics";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-        
-        // Your web app's Firebase configuration
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    <script type="module">
+        // Firebase 앱 및 Firestore 라이브러리 로드
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // TODO: Firebase 콘솔에서 복사한 config를 여기에 붙여넣으세요.
         const firebaseConfig = {
           apiKey: "AIzaSyDEzIHcKHZpDu3QUpX62UUTXVvZmMO16yI",
           authDomain: "process-monitoring-test-ad6df.firebaseapp.com",
@@ -61,78 +62,29 @@
           measurementId: "G-ZHP1T48CWT"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
 
-    // 2. 파일 데이터 기반 초기 설정
-    const initialJobs = [
-        { id: '1', client: '성심', task: '작업1', manager: '박미경', phone: '010-0000-0000' },
-        { id: '2', client: '동인', task: '작업2', manager: '김민경', phone: '010-1111-1111' },
-        { id: '3', client: '한빛', task: '작업3', manager: '오재미', phone: '010-2222-2222' },
-        { id: '4', client: '남북', task: '작업4', manager: '유재석', phone: '010-3333-3333' },
-        { id: '5', client: '제일', task: '작업5', manager: '강호동', phone: '010-4444-4444' }
-    ];
-    const stages = ["접수완료", "인쇄대기", "인쇄완료", "납품대기", "납품완료"];
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const data = {
+                company: document.getElementById('company').value,
+                jobName: document.getElementById('jobName').value,
+                manager: document.getElementById('manager').value,
+                phone: document.getElementById('phone').value,
+                status: document.getElementById('status').value,
+                createdAt: serverTimestamp()
+            };
 
-    // 데이터베이스 초기화 (데이터가 없을 때만 실행)
-    db.ref('jobs').once('value', snapshot => {
-        if (!snapshot.exists()) {
-            initialJobs.forEach(job => {
-                db.ref('jobs/' + job.id).set({ ...job, status: '접수완료' });
-            });
-        }
-    });
-
-    let currentSelectedId = null;
-
-    // 3. 리스트 렌더링 및 실시간 업데이트
-    db.ref('jobs').on('value', snapshot => {
-        const jobs = snapshot.val();
-        const listDiv = document.getElementById('job-list');
-        listDiv.innerHTML = '';
-
-        for (let id in jobs) {
-            const item = jobs[id];
-            const div = document.createElement('div');
-            div.className = 'list-item';
-            div.onclick = () => openModal(id, item.client);
-            div.innerHTML = `
-                <div class="info">
-                    <h3>${item.client}</h3>
-                    <p>${item.task} | ${item.manager}</p>
-                </div>
-                <div class="status-badge">${item.status}</div>
-            `;
-            listDiv.appendChild(div);
-        }
-    });
-
-    // 4. 모달 제어 함수
-    function openModal(id, client) {
-        currentSelectedId = id;
-        document.getElementById('modal-title').innerText = `${client} 공정 변경`;
-        const btnContainer = document.getElementById('stage-buttons');
-        btnContainer.innerHTML = '';
-        
-        stages.forEach(stage => {
-            const btn = document.createElement('button');
-            btn.className = 'stage-btn';
-            btn.innerText = stage;
-            btn.onclick = () => updateStatus(stage);
-            btnContainer.appendChild(btn);
+            try {
+                const docRef = await addDoc(collection(db, "orders"), data);
+                alert("접수가 완료되었습니다! (ID: " + docRef.id + ")");
+                // 입력창 초기화
+                document.querySelectorAll('input').forEach(input => input.value = '');
+            } catch (e) {
+                console.error("에러 발생: ", e);
+                alert("저장 실패: " + e.message);
+            }
         });
-        document.getElementById('modal').style.display = 'flex';
-    }
-
-    function closeModal() {
-        document.getElementById('modal').style.display = 'none';
-    }
-
-    function updateStatus(newStatus) {
-        db.ref('jobs/' + currentSelectedId).update({ status: newStatus })
-          .then(() => closeModal());
-    }
-</script>
+    </script>
 </body>
 </html>
