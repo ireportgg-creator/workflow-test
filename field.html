@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>현장 공정 체크</title>
+    <link rel="manifest" href="./manifest.json">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; }
+        h2 { font-size: 1.2rem; color: #333; margin-bottom: 20px; text-align: center; }
+        
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 5px solid #007bff; }
+        .job-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 10px; color: #222; }
+        .manager-info { font-size: 0.85rem; color: #666; margin-bottom: 12px; }
+        
+        .status-select { 
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; 
+            font-size: 1rem; background-color: #fff; cursor: pointer;
+        }
+        
+        /* 로딩 애니메이션 */
+        .loading { text-align: center; padding: 20px; color: #888; }
+    </style>
+</head>
+<body>
+
+    <h2>👷 현장 작업 리스트</h2>
+    <div id="jobList" class="loading">데이터를 불러오는 중...</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            // 메인 페이지에서 사용한 Config와 동일하게 입력하세요.
+            apiKey: "...",
+            authDomain: "...",
+            projectId: "...",
+            storageBucket: "...",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const ordersCol = collection(db, "orders");
+
+        // 상태 옵션 리스트
+        const statusOptions = ['접수완료', '출력', '인쇄', '후가공', '제본', '납품', '완료'];
+
+        // 실시간 데이터 감시 및 렌더링
+        const q = query(ordersCol, orderBy("createdAt", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const listDiv = document.getElementById('jobList');
+            listDiv.innerHTML = '';
+            listDiv.classList.remove('loading');
+
+            snapshot.forEach((documentSnapshot) => {
+                const item = documentSnapshot.data();
+                const docId = documentSnapshot.id;
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                // [상호] 작업명 조합
+                const displayTitle = `[${item.company}] ${item.jobName}`;
+
+                card.innerHTML = `
+                    <div class="job-title">${displayTitle}</div>
+                    <div class="manager-info">담당: ${item.manager} | ${item.phone}</div>
+                    <select class="status-select" onchange="updateStatus('${docId}', this.value)">
+                        ${statusOptions.map(opt => `<option value="${opt}" ${item.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                    </select>
+                `;
+                listDiv.appendChild(card);
+            });
+        });
+
+        // 상태 업데이트 함수 (전역 등록)
+        window.updateStatus = async (id, newStatus) => {
+            try {
+                const docRef = doc(db, "orders", id);
+                await updateDoc(docRef, { status: newStatus });
+                console.log("상태 변경 완료:", newStatus);
+            } catch (e) {
+                alert("업데이트 실패: " + e.message);
+            }
+        };
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(() => console.log("SW Registered"));
+        }
+    </script>
+</body>
+</html>
