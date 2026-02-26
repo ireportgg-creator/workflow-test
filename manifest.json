@@ -1,7 +1,7 @@
 {
   "name": "공정 모니터링 현장앱",
   "short_name": "공정관리",
-  "start_url": "/field.html",
+  "start_url": "./field.html", 
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#007bff",
